@@ -1,6 +1,9 @@
 from torch.utils import data
 import torchvision
+import numpy as np
 
-def load_array(data_array,batch_size,is_shuffle=True,resize=None):
-    return data.DataLoader(data_array,batch_size,shuffle=is_shuffle)
-    #是否随机挑选batch_size个
+def select(X,y,batch_size):
+    a=np.random.choice(X.shape[0],batch_size)
+    return X[a],y[a]
+#随机选择
+
