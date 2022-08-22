@@ -10,8 +10,9 @@ def select(X,y,batch_size):
 
 def calc_acc(X,y,net):
     tot=0
+    res=net(X)
     for i in range(X.shape[0]):
-        if(net(X[i]).argmax()==y[i]):
+        if(res[i].argmax()==y[i]):
             tot+=1
     return tot/X.shape[0]
 #计算准确率
@@ -34,18 +35,26 @@ def softmax(X):
     partition=X_exp.sum(dim=1,keepdim=True)
     return X_exp/partition#广播机制 自动补全
 
-def init_weight(m):
+def init_normal(m):
     if type(m)==nn.Linear:
         nn.init.normal_(m.weight,std=0.01,mean=0)
-        
-def mine_SGD(params,lr,loss_func,epochs,X,y,net):
+        nn.init.zeros_(m.bias)
+        #nn.init.constant_
+def mine_SGD(params,lr,loss_func,epochs,X,y,net,loss_list,acc_list):
     for epoch in range(epochs):
         loss=loss_func(net(X),y).mean()
         loss.backward()
-    
+
         with torch.no_grad():#更新时不用计算梯度
             #非常重要
             for param in params:
                 param-=(param.grad)*lr
                 param.grad.zero_() 
+        loss_list.append(loss.item())
+        acc_list.append(calc_acc(X,y,net))
         print(f'epoch {epoch + 1}, loss {loss.item():f}') 
+    
+def see_example(X,y,net):
+    for i in range(50):
+        print(f'predict:{net(X)[i].argmax()} real:{y[i]}')
+
