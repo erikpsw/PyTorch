@@ -17,7 +17,7 @@ def calc_acc(X,y,net):
     return tot/X.shape[0]
 #计算准确率
 
-def my_reshape(X,num_input):
+def my_reshape(X,num_input):#将元素压成一维
     temp=[i[0].reshape(num_input) for i in X]
     res=torch.zeros(len(X),num_input)#形状必须完全一致
 
@@ -35,9 +35,9 @@ def softmax(X):
     partition=X_exp.sum(dim=1,keepdim=True)
     return X_exp/partition#广播机制 自动补全
 
-def init_normal(m):
-    if type(m)==nn.Linear:
-        nn.init.normal_(m.weight,std=0.01,mean=0)
+def init_auto(m):
+    if type(m)==nn.Linear or type(m)==nn.Conv2d:
+        nn.init.xavier_uniform_(m.weight)#自动计算
         nn.init.zeros_(m.bias)
         #nn.init.constant_
 def mine_SGD(params,lr,loss_func,epochs,X,y,net,loss_list,acc_list):
@@ -58,3 +58,8 @@ def see_example(X,y,net):
     for i in range(50):
         print(f'predict:{net(X)[i].argmax()} real:{y[i]}')
 
+def batch_data(X,batch_size,device=torch.device('cuda')):
+    temp_x=[i[0][0].unsqueeze_(0) for i in X]#升维再导入
+    data_x=torch.cat(temp_x).reshape(batch_size,-1,28,28).unsqueeze_(2)#加上通道数
+    data_y=torch.tensor([i[1] for i in X]).reshape(batch_size,-1)
+    return data_x.to(device),data_y.to(device)
