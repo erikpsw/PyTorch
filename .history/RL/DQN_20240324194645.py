@@ -11,7 +11,7 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-epochs=100000
+epochs=1000
 
 #网格图类
 class grid:
@@ -122,6 +122,10 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
+    
+is_stable=False # 策略是否稳定
+epoch=0
+episode_length=5
 
 policy_b=[0.2,0.2,0.2,0.2,0.2]
 

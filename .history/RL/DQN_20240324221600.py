@@ -1,6 +1,9 @@
 import taichi as ti
 import numpy as np
 import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 ti.init(ti.cpu)
 pixel_size=60
@@ -11,7 +14,8 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-epochs=100000
+dataset_size=1000
+epochs=10
 
 #网格图类
 class grid:
@@ -46,6 +50,7 @@ class state:
         self.policy=0
         self.value=0
         self.q_value=[0,0,0,0,0]
+        
     def __repr__(self):
         return f"[{self.x},{self.y},reward{self.reward}]"
     
@@ -78,7 +83,15 @@ def next_state(x,y,dir):
     elif(dir==3):
         return (x,y) if x==0 else (x-1,y)
     
-
+class Network(nn.Module):
+    def __init__(self):
+        super(Network, self).__init__() #初始化 nn.Module 
+        self.mlp1=nn.Linear(2,100)
+        self.mlp2=nn.Linear(100,5) # 5个action
+    
+    def forward(self,x):
+        return self.mlp2(self.mlp1(x))
+            
 state_list=[]
 for i in range(grid_width):
     tmp=[]
@@ -122,26 +135,61 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
-
+    
 policy_b=[0.2,0.2,0.2,0.2,0.2]
 
 #generate data
 dataset=[]
 x,y=0,0
 alpha=0.1 # learning rate
+target_network=Network()
+main_network=Network()
+learning_epoch=100
+main_epoch=5
+optimizer = optim.Adam(main_network.parameters(), lr=0.001, betas=(0.9, 0.98), eps=1e-9)
 
-for i in range(epochs):
+# generate datasest
+for i in range(dataset_size):
     pv_x,pv_y=x,y
     cur_dir = random.choices(range(len(policy_b)), weights=policy_b)[0]
-    dataset.append([[x,y],cur_dir])
+    r=state_list[pv_x][pv_y].reward[cur_dir]
     x,y=next_state(x,y,cur_dir)
-    pv_state=state_list[pv_x][pv_y]
-    q_list=pv_state.q_value
-    q_list[cur_dir]=q_list[cur_dir]-alpha*(pv_state.q_value[cur_dir]-(pv_state.reward[cur_dir]+gamma*max(state_list[x][y].q_value)))
-    pv_state.value=max(q_list)
-    pv_state.policy = q_list.index(max(q_list))
-# print(dataset)
+    dataset.append([[pv_x,pv_y],cur_dir,r,[x,y]])
 
+batch_size=30
+for _ in range(main_epoch):
+    for epoch in range(epochs):
+        batch=random.sample(dataset,batch_size)
+        input=torch.zeros((batch_size,2))
+        R=torch.zeros(batch_size)
+        A=torch.zeros(batch_size)
+        for i,data in enumerate(batch):
+            input[i,0]=data[0][0] # x
+            input[i,1]=data[0][1] # y
+            R[i]=data[2]
+            A[i]=data[1]
+        q_output=target_network(input)
+        max_q, _=torch.max(q_output,dim=1)
+        indexed_output = torch.zeros(batch_size)
+        y_T=R+gamma*max_q
+        for i in range(learning_epoch):
+            optimizer.zero_grad()
+            main_output=main_network(input)
+            loss=torch.tensor(0)
+            for j in range(batch_size):
+                loss=loss+ (main_output[j, A[j].long()]-y_T[i])**2
+            loss.backward()
+            optimizer.step()
+            print(f"Epoch: {i+1}, Loss: {loss.item()}")
+    target_network.load_state_dict(main_network.state_dict())
+
+# greed policy
+for i in range(grid_width):
+    for j in range(grid_height):
+        q_value=main_network(torch.tensor([i,j],dtype=torch.float32))
+        policy=torch.argmax(q_value)
+        state_list[i][j].policy=policy
+        
 line_b=np.array([[x,0] for x in range(pixel_size,width,pixel_size)])/width
 line_b1=np.array([[0,y] for y in range(pixel_size,height,pixel_size)])/height
 line_e=np.array([[x,width-1] for x in range(pixel_size,width,pixel_size)])/width

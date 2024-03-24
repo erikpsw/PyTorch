@@ -122,6 +122,10 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
+    
+is_stable=False # 策略是否稳定
+epoch=0
+episode_length=5
 
 policy_b=[0.2,0.2,0.2,0.2,0.2]
 

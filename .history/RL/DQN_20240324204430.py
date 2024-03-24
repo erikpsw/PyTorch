@@ -1,6 +1,8 @@
 import taichi as ti
 import numpy as np
 import random
+import torch
+import torch.nn as nn
 
 ti.init(ti.cpu)
 pixel_size=60
@@ -11,7 +13,8 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-epochs=100000
+dataset_size=1000
+epochs=10
 
 #网格图类
 class grid:
@@ -46,6 +49,7 @@ class state:
         self.policy=0
         self.value=0
         self.q_value=[0,0,0,0,0]
+        
     def __repr__(self):
         return f"[{self.x},{self.y},reward{self.reward}]"
     
@@ -78,7 +82,15 @@ def next_state(x,y,dir):
     elif(dir==3):
         return (x,y) if x==0 else (x-1,y)
     
-
+class network(nn.Module):
+    def __init__(self,d_model,num_heads):
+        super(network, self).__init__() #初始化 nn.Module 
+        self.mlp1=nn.Linear(2,100)
+        self.mlp2=nn.Linear(100,5) # 5个action
+    
+    def forward(self,x):
+        return self.mlp2(self.mlp1(x))
+            
 state_list=[]
 for i in range(grid_width):
     tmp=[]
@@ -122,6 +134,9 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
+    
+is_stable=False # 策略是否稳定
+episode_length=5
 
 policy_b=[0.2,0.2,0.2,0.2,0.2]
 
@@ -130,50 +145,52 @@ dataset=[]
 x,y=0,0
 alpha=0.1 # learning rate
 
-for i in range(epochs):
+# generate datasest
+for i in range(dataset_size):
     pv_x,pv_y=x,y
     cur_dir = random.choices(range(len(policy_b)), weights=policy_b)[0]
-    dataset.append([[x,y],cur_dir])
+    r=state_list[pv_x][pv_y].reward[cur_dir]
     x,y=next_state(x,y,cur_dir)
-    pv_state=state_list[pv_x][pv_y]
-    q_list=pv_state.q_value
-    q_list[cur_dir]=q_list[cur_dir]-alpha*(pv_state.q_value[cur_dir]-(pv_state.reward[cur_dir]+gamma*max(state_list[x][y].q_value)))
-    pv_state.value=max(q_list)
-    pv_state.policy = q_list.index(max(q_list))
-# print(dataset)
+    dataset.append([[pv_x,pv_y],cur_dir,r,[x,y]])
 
-line_b=np.array([[x,0] for x in range(pixel_size,width,pixel_size)])/width
-line_b1=np.array([[0,y] for y in range(pixel_size,height,pixel_size)])/height
-line_e=np.array([[x,width-1] for x in range(pixel_size,width,pixel_size)])/width
-line_e1=np.array([[height-1,y] for y in range(pixel_size,height,pixel_size)])/height
-grid_world=grid(width,height)
-for i in range(grid_width):
-    for j in range(grid_height):
-        if(state_list[i][j].kind==1):
-            grid_world.set_color(i,j,[120/255,152/255,232/255])
-        elif(state_list[i][j].kind==2):
-            grid_world.set_color(i,j,[245/255,151/255,148/255])
+batch_size=30
+indexs=np.random.choice(range(dataset_size),batch_size)
+for epoch in range(epochs):
+    print(epoch)
+    print(dataset[indexs[epoch]])
 
-agent_x=0
-agent_y=0
-myagent=agent(agent_x,agent_y)
+# line_b=np.array([[x,0] for x in range(pixel_size,width,pixel_size)])/width
+# line_b1=np.array([[0,y] for y in range(pixel_size,height,pixel_size)])/height
+# line_e=np.array([[x,width-1] for x in range(pixel_size,width,pixel_size)])/width
+# line_e1=np.array([[height-1,y] for y in range(pixel_size,height,pixel_size)])/height
+# grid_world=grid(width,height)
+# for i in range(grid_width):
+#     for j in range(grid_height):
+#         if(state_list[i][j].kind==1):
+#             grid_world.set_color(i,j,[120/255,152/255,232/255])
+#         elif(state_list[i][j].kind==2):
+#             grid_world.set_color(i,j,[245/255,151/255,148/255])
 
-dt=0.5
-N=0
+# agent_x=0
+# agent_y=0
+# myagent=agent(agent_x,agent_y)
 
-gui=ti.GUI("grid",(width,height))
+# dt=0.5
+# N=0
 
-while gui.running:
-    N+=1
-    if(N==dt*60):
-        N=0
-        dir=state_list[agent_x][agent_y].policy
-        agent_x,agent_y=next_state(agent_x,agent_y,dir)
-        myagent=agent(agent_x,agent_y)
-    gui.set_image(grid_world.canvas)
-    gui.lines(begin=np.concatenate((line_b,line_b1),axis=0), end=np.concatenate((line_e,line_e1),axis=0), radius=1, color=0x000000)
-    gui.circle(myagent.pos,color=0x000000,radius=5)
-    for i in range(grid_width):
-        for j in range(grid_height):
-            gui.text(content=str(state_list[i][j].value)[:4], pos=[i/grid_width,(j+1)/grid_height], font_size=20, color=0x000000)
-    gui.show()
+# gui=ti.GUI("grid",(width,height))
+
+# while gui.running:
+#     N+=1
+#     if(N==dt*60):
+#         N=0
+#         dir=state_list[agent_x][agent_y].policy
+#         agent_x,agent_y=next_state(agent_x,agent_y,dir)
+#         myagent=agent(agent_x,agent_y)
+#     gui.set_image(grid_world.canvas)
+#     gui.lines(begin=np.concatenate((line_b,line_b1),axis=0), end=np.concatenate((line_e,line_e1),axis=0), radius=1, color=0x000000)
+#     gui.circle(myagent.pos,color=0x000000,radius=5)
+#     for i in range(grid_width):
+#         for j in range(grid_height):
+#             gui.text(content=str(state_list[i][j].value)[:4], pos=[i/grid_width,(j+1)/grid_height], font_size=20, color=0x000000)
+#     gui.show()

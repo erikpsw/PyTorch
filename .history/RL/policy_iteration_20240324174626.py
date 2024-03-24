@@ -1,6 +1,5 @@
 import taichi as ti
 import numpy as np
-import random
 
 ti.init(ti.cpu)
 pixel_size=60
@@ -11,7 +10,7 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-epochs=100000
+epochs=30
 
 #网格图类
 class grid:
@@ -43,9 +42,9 @@ class state:
         self.y=y
         self.reward=[0,0,0,0,0]
         self.kind=0#1为目标，2为障碍
-        self.policy=0
         self.value=0
-        self.q_value=[0,0,0,0,0]
+        self.policy=0
+    
     def __repr__(self):
         return f"[{self.x},{self.y},reward{self.reward}]"
     
@@ -93,13 +92,15 @@ state_list[1][2].kind=2
 state_list[2][3].kind=2
 state_list[3][1].kind=2
 state_list[4][4].kind=2
-
+#初始化奖励
+v_list=[]
 for i in range(grid_width):
     tmp=[]
     for j in range(grid_height):
         obj=state_list[i][j]
         x=obj.x
         y=obj.y
+        tmp.append(obj.value)
         #上
         if(y+1==grid_height):
             obj.reward[0]=-1
@@ -122,26 +123,46 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
+    v_list.append(tmp)
+    
+is_stable=False # 策略是否稳定
+epoch=0
 
-policy_b=[0.2,0.2,0.2,0.2,0.2]
+#policy iteration
+while not is_stable:
+    is_stable=True
+    print(f'epoch {epoch}')
+    epoch+=1
+    
+    # policy evaluation
+    for t in range(epochs):
+        # print(f"evaluation {t} {v_list[0]}")
+        for i in range(grid_width):
+            for j in range(grid_height):
+                q_list=[]
+                obj=state_list[i][j]
+                dir=obj.policy
+                nx,ny=next_state(i,j,dir)
+                obj.value=obj.reward[dir]+(gamma*v_list[nx][ny])
+        for i in range(grid_width):
+            for j in range(grid_height):
+                v_list[i][j]=state_list[i][j].value # v_list 为上一轮的value
+                
+    # policy improvement
+    for i in range(grid_width):
+        for j in range(grid_height):
+            q_list=[]
+            obj=state_list[i][j]
+            for k in range(5):
+                nx,ny=next_state(i,j,k)
+                q_list.append(obj.reward[k]+(gamma*v_list[nx][ny]))
+            dir = q_list.index(max(q_list))
+            if(dir!=obj.policy):
+                is_stable=False
+            obj.policy=dir
+            
 
-#generate data
-dataset=[]
-x,y=0,0
-alpha=0.1 # learning rate
-
-for i in range(epochs):
-    pv_x,pv_y=x,y
-    cur_dir = random.choices(range(len(policy_b)), weights=policy_b)[0]
-    dataset.append([[x,y],cur_dir])
-    x,y=next_state(x,y,cur_dir)
-    pv_state=state_list[pv_x][pv_y]
-    q_list=pv_state.q_value
-    q_list[cur_dir]=q_list[cur_dir]-alpha*(pv_state.q_value[cur_dir]-(pv_state.reward[cur_dir]+gamma*max(state_list[x][y].q_value)))
-    pv_state.value=max(q_list)
-    pv_state.policy = q_list.index(max(q_list))
-# print(dataset)
-
+# print(v_list)
 line_b=np.array([[x,0] for x in range(pixel_size,width,pixel_size)])/width
 line_b1=np.array([[0,y] for y in range(pixel_size,height,pixel_size)])/height
 line_e=np.array([[x,width-1] for x in range(pixel_size,width,pixel_size)])/width
@@ -153,10 +174,10 @@ for i in range(grid_width):
             grid_world.set_color(i,j,[120/255,152/255,232/255])
         elif(state_list[i][j].kind==2):
             grid_world.set_color(i,j,[245/255,151/255,148/255])
-
 agent_x=0
 agent_y=0
 myagent=agent(agent_x,agent_y)
+
 
 dt=0.5
 N=0

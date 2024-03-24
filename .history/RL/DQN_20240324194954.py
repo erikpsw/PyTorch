@@ -1,6 +1,8 @@
 import taichi as ti
 import numpy as np
 import random
+import torch
+import torch.nn as nn
 
 ti.init(ti.cpu)
 pixel_size=60
@@ -11,7 +13,7 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-epochs=100000
+epochs=1000
 
 #网格图类
 class grid:
@@ -46,6 +48,7 @@ class state:
         self.policy=0
         self.value=0
         self.q_value=[0,0,0,0,0]
+        
     def __repr__(self):
         return f"[{self.x},{self.y},reward{self.reward}]"
     
@@ -78,7 +81,15 @@ def next_state(x,y,dir):
     elif(dir==3):
         return (x,y) if x==0 else (x-1,y)
     
-
+class network(nn.Module):
+    def __init__(self,d_model,num_heads):
+        super(network, self).__init__() #初始化 nn.Module 
+        self.mlp1=nn.Linear(2,100)
+        self.mlp2=nn.Linear(100,5) # 5个action
+    
+    def forward(self):
+        return self.mlp1()
+        
 state_list=[]
 for i in range(grid_width):
     tmp=[]
@@ -122,6 +133,10 @@ for i in range(grid_width):
             obj.reward[3]=init_reward(x-1,y)
         #stay
         obj.reward[4]=init_reward(x,y)
+    
+is_stable=False # 策略是否稳定
+epoch=0
+episode_length=5
 
 policy_b=[0.2,0.2,0.2,0.2,0.2]
 
