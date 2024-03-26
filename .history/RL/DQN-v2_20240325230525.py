@@ -14,8 +14,8 @@ height=pixel_size*grid_height
 step=1/grid_width
 gamma=0.9
 punishment=-10
-dataset_size=1000
-epochs=5
+dataset_size=10000
+
 
 #网格图类
 class grid:
@@ -87,13 +87,13 @@ class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__() #初始化 nn.Module 
         
-        # self.mlp_s1=nn.Linear(2,100)
-        # self.mlp_s2=nn.Linear(100,5)
+        # self.mlp_s1=nn.Linear(2,300)
+        # self.mlp_s2=nn.Linear(300,5)
         
-        self.mlp1=nn.Linear(2,40)
+        self.mlp1=nn.Linear(3,40)
         self.mlp2=nn.Linear(40,300)
-        self.mlp3=nn.Linear(300,50)
-        self.mlp4=nn.Linear(50,5) # 5个action
+        self.mlp3=nn.Linear(300,20)
+        self.mlp4=nn.Linear(20,1) # 5个action
     
     def forward(self,x):
         return self.mlp4(self.mlp3(self.mlp2(self.mlp1(x))))
@@ -150,9 +150,10 @@ policy_b=[0.2,0.2,0.2,0.2,0.2]
 x,y=0,0
 target_network=Network()
 main_network=Network()
-learning_epoch=100
-main_epoch=20
-epsilon=0.1
+learning_epoch=50
+main_epoch=10
+epsilon=0.3
+epochs=20
 mse = nn.MSELoss()
 optimizer = optim.Adam(main_network.parameters(), lr=0.001, betas=(0.9, 0.98), eps=1e-9)
 
@@ -165,31 +166,35 @@ for i in range(dataset_size):
     x,y=next_state(x,y,cur_dir)
     dataset.append([[pv_x,pv_y],cur_dir,r,[x,y]])
 
-batch_size=100
-for _ in range(main_epoch):
+batch_size=1000
+for main_e in range(main_epoch):
     for epoch in range(epochs):
+        
         batch=random.sample(dataset,batch_size)
-        input=torch.zeros((batch_size,2))
-        next_input=torch.zeros((batch_size,2)) # 下一个状态输入
+        input=torch.zeros((batch_size,3))
         R=torch.zeros(batch_size)
-        A=torch.zeros(batch_size)
+        next_input=torch.zeros((5,batch_size,3))
         for i,data in enumerate(batch):
             input[i,0]=data[0][0] # x
             input[i,1]=data[0][1] # y
-            next_input[i,0]=data[3][0]
-            next_input[i,1]=data[3][1] 
-            R[i]=data[2]
-            A[i]=data[1]
-        q_output=target_network(next_input)
-        max_q, _=torch.max(q_output,dim=1)
+            input[i,2]=data[1] # q
+            for j in range(5):
+                next_input[j,i,0]=data[3][0]
+                next_input[j,i,1]=data[3][1] 
+                next_input[j,i,2]=j
+            R[i]=data[1]
+        
+        result=torch.zeros(5,batch_size,1)
+        for j in range(5):
+            result[j,:]=target_network(next_input[j,:])
+        max_q=torch.zeros(batch_size,1)
+        for t in range(batch_size):
+            max_q[t]=max(result[:,t,:])
         y_T=R+gamma*max_q
         for i in range(learning_epoch):
             optimizer.zero_grad()
             main_output=main_network(input)
-            indexed_output = torch.zeros(batch_size)
-            for j in range(batch_size):
-                indexed_output[j] = main_output[j, A[j].long()]
-            loss=mse(indexed_output,y_T)
+            loss=mse(main_output,y_T)
             loss.backward(retain_graph=True)
             optimizer.step()
             print(f"Epoch: {i+1}, Loss: {loss.item()}")
@@ -198,7 +203,7 @@ for _ in range(main_epoch):
     dataset=[]
     for i in range(dataset_size):
         pv_x,pv_y=x,y
-        q_value=main_network(torch.tensor([i,j],dtype=torch.float32))
+        q_value=main_network(torch.tensor([x,y],dtype=torch.float32))
         cur_dir = torch.argmax(q_value)
         prob_list=np.zeros(5)
         for i in range(5):
@@ -211,6 +216,9 @@ for _ in range(main_epoch):
         x,y=next_state(x,y,cur_dir)
         dataset.append([[pv_x,pv_y],cur_dir,r,[x,y]])
     print("________________________________________")
+    q_value=main_network(torch.tensor([0,0],dtype=torch.float32))
+    policy=torch.argmax(q_value)
+    print(f"epoch {main_e} {q_value} {policy}")
     
 
 # greed policy
