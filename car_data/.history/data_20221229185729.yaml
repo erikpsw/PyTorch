@@ -1,0 +1,6 @@
+#train 写存放训练集图片的文件地址#val 写存放测试集图片的文件地址
+train: D:/wxl/test2/train/images
+val: D:/wxl/test2/vaild/images
+#nc 标注的种类数量，name 里面放的输种类的名称
+nc: 7
+names: ['Motor Vehicle', 'Non_motorized Vehicle', 'Pedestrian', 'Traffic Light-Red Light' ,'Traffic Light-Yellow Light', 'Traffic Light-Green Light', 'Traffic Light-Off']
